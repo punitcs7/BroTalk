@@ -1,0 +1,27 @@
+[package]
+name = "brotalk"
+version = "1.0.0"
+description = "BroTalk - Low-latency Windows Voice Changer, Soundboard & EchoPrank Sampler"
+authors = ["BroTalk Team"]
+edition = "2021"
+
+[lib]
+name = "brotalk_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+cpal = "0.15"
+ringbuf = "0.4"
+symphonia = { version = "0.5", features = ["all"] }
+hound = "3.5"
+crossbeam-channel = "0.5"
+parking_lot = "0.12"
+log = "0.4"
+env_logger = "0.11"
