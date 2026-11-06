@@ -6,8 +6,9 @@ use audio::engine::AudioEngineState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let engine_state = AudioEngineState::new();
+    let engine_exit = engine_state.clone();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -40,6 +41,12 @@ pub fn run() {
             log::info!("BroTalk engine initialized");
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running BroTalk application");
+        .build(tauri::generate_context!())
+        .expect("error while building BroTalk application");
+
+    app.run(move |_app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            engine_exit.stop_engine();
+        }
+    });
 }

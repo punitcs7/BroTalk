@@ -1,7 +1,7 @@
 # BroTalk ⚡
 > **Low-Latency (<15ms) System-Wide Windows Voice Changer, Soundboard & EchoPrank Sampler**
 
-![BroTalk Version](https://img.shields.io/badge/version-1.1.0-cyan?style=for-the-badge)
+![BroTalk Version](https://img.shields.io/badge/version-1.1.1-cyan?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-blue?style=for-the-badge&logo=windows)
 ![Framework](https://img.shields.io/badge/Tauri-v2.0-orange?style=for-the-badge&logo=tauri)
 ![Engine](https://img.shields.io/badge/Rust-WASAPI%20DSP-red?style=for-the-badge&logo=rust)

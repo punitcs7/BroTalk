@@ -17,7 +17,7 @@ export function useUpdater() {
     isChecking: false,
     updateAvailable: false,
     newVersion: null,
-    currentVersion: '1.0.0',
+    currentVersion: '1.1.1',
     isDownloading: false,
     downloadProgress: 0,
     statusMessage: null,
@@ -88,7 +88,6 @@ export function useUpdater() {
 
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
-      const { relaunch } = await import('@tauri-apps/plugin-process');
 
       const update = await check();
       if (!update || !update.available) {
@@ -98,6 +97,14 @@ export function useUpdater() {
 
       let downloaded = 0;
       let contentLength = 0;
+
+      // 1. Gracefully stop audio engine to free WASAPI endpoints & MMCSS threads immediately
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('stop_engine');
+      } catch (err) {
+        console.warn('Could not stop audio engine prior to update:', err);
+      }
 
       await update.downloadAndInstall((event) => {
         switch (event.event) {
@@ -125,8 +132,9 @@ export function useUpdater() {
         }
       });
 
-      // Relaunch the new version
-      await relaunch();
+      // On Windows, the NSIS installer is already launched with `/R` (auto-restart) and the
+      // process exits. Calling relaunch() here spawns a duplicate process that causes NSIS
+      // to fail with "Failed to kill BroTalk".
     } catch (err: any) {
       console.error('Update download/install failed:', err);
       setState((prev) => ({

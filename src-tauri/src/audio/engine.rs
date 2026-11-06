@@ -32,6 +32,7 @@ pub struct AudioTelemetry {
     pub engine_error: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct AudioEngineState {
     pub is_running: Arc<AtomicBool>,
     pub is_muted: Arc<AtomicBool>,
