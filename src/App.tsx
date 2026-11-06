@@ -507,6 +507,9 @@ export const App: React.FC = () => {
           <VoiceChangerTab
             params={dspParams}
             onChangeParams={handleChangeDspParams}
+            telemetry={telemetry}
+            onOpenSoundboardTab={() => setActiveTab('soundboard')}
+            onPanicStop={handleStopAllSoundboard}
           />
         )}
 

@@ -1,6 +1,6 @@
 [package]
 name = "brotalk"
-version = "1.0.0"
+version = "1.1.0"
 description = "BroTalk - Low-latency Windows Voice Changer, Soundboard & EchoPrank Sampler"
 authors = ["BroTalk Team"]
 edition = "2021"

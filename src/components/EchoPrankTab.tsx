@@ -323,6 +323,110 @@ export const EchoPrankTab: React.FC<EchoPrankTabProps> = ({
           </button>
         </div>
       </div>
+
+      {/* =========================================================================
+          LOWER SECTION: ECHOPRANK TAPE VAULT & DISCORD ROUTING TELEMETRY
+      ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
+        {/* Quick Prank Tape Vault (4 Slots) */}
+        <div className="lg:col-span-7 bg-[#0C1220]/90 rounded-2xl border border-slate-800/90 p-4 flex flex-col justify-between shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-rose-950/80 border border-rose-500/40 flex items-center justify-center text-rose-400 shadow-glow-pink">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-mono font-bold text-slate-100 uppercase tracking-wide">
+                  Prank Tape Vault
+                </h4>
+                <p className="text-[10px] text-slate-400 font-sans">
+                  Quick-slots for saved friend voice clips & reactions
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-500/30">
+              4 SLOTS READY
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 flex-1">
+            {[
+              { id: '1', name: 'Discord Screamer', duration: '3.2s', hotkey: 'Ctrl+1', color: 'border-rose-500/40 text-rose-300' },
+              { id: '2', name: 'Party Chat Laugh', duration: '4.8s', hotkey: 'Ctrl+2', color: 'border-amber-500/40 text-amber-300' },
+              { id: '3', name: 'Rage Quit Sigh', duration: '2.5s', hotkey: 'Ctrl+3', color: 'border-cyan-500/40 text-cyan-300' },
+              { id: '4', name: 'Whimper / Confusion', duration: '5.0s', hotkey: 'Ctrl+4', color: 'border-emerald-500/40 text-emerald-300' },
+            ].map((slot) => (
+              <div
+                key={slot.id}
+                className={`bg-[#121B2F]/80 border ${slot.color} rounded-xl p-3 flex flex-col justify-between hover:bg-[#18243E] transition-all group`}
+              >
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
+                  <span className="font-bold text-white group-hover:text-cyan-300 transition-colors">{slot.name}</span>
+                  <span className="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-slate-400">{slot.hotkey}</span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] font-mono mt-2 pt-2 border-t border-slate-800/80">
+                  <span className="text-slate-500">{slot.duration}</span>
+                  <button
+                    onClick={handlePlay}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-[10px] font-mono transition-all"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Trigger</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Discord WASAPI Loopback Pipeline Monitor */}
+        <div className="lg:col-span-5 bg-[#0C1220]/90 rounded-2xl border border-slate-800/90 p-4 flex flex-col justify-between shadow-lg">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                <Radio className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-mono font-bold text-slate-100 uppercase tracking-wide">
+                  Loopback Pipeline
+                </h4>
+                <p className="text-[10px] text-slate-400 font-sans">
+                  WASAPI Shared capture signal flow
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs font-mono">
+              <div className="bg-[#121B2F]/80 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
+                <span className="text-slate-400">1. Discord Audio:</span>
+                <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  48.0 kHz 2-Ch Live
+                </span>
+              </div>
+
+              <div className="bg-[#121B2F]/80 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
+                <span className="text-slate-400">2. Rolling Ringbuf:</span>
+                <span className="text-cyan-400 font-bold">
+                  30s Circular Buffer
+                </span>
+              </div>
+
+              <div className="bg-[#121B2F]/80 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
+                <span className="text-slate-400">3. Injection Bridge:</span>
+                <span className="text-purple-300 font-bold">
+                  CABLE Input (0.0ms delay)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-slate-800/80 text-[10px] text-slate-500 font-sans">
+            💡 <strong>Pro Tip:</strong> Hold <kbd className="px-1 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300 font-mono">Ctrl+Shift+E</kbd> while your friend speaks in Discord to capture exact phrases.
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 };

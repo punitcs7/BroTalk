@@ -8,6 +8,7 @@ import {
   Layers,
   ZapOff,
   Music,
+  Sparkles,
 } from 'lucide-react';
 import { SoundboardSlot } from '../types';
 
@@ -133,12 +134,60 @@ export const SoundboardTab: React.FC<SoundboardTabProps> = ({
       {/* Soundboard Slots Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {slots.length === 0 ? (
-          <div className="col-span-full py-14 flex flex-col items-center justify-center text-center text-slate-500 bg-brand-card/30 rounded-xl border border-dashed border-brand-border">
-            <Music className="w-10 h-10 mb-3 text-slate-600" />
-            <p className="text-sm font-mono text-slate-400">Your Soundboard is Empty</p>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm">
-              Enter a file path above or drop MP3, WAV, OGG, or FLAC audio files to arm your soundboard buttons.
-            </p>
+          <div className="col-span-full space-y-4">
+            <div className="py-8 px-6 flex flex-col items-center justify-center text-center text-slate-500 bg-[#0C1220]/60 rounded-2xl border border-dashed border-slate-800">
+              <div className="w-12 h-12 rounded-xl bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-3 shadow-glow-lime">
+                <Music className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-mono font-bold text-slate-200">Custom Soundboard Bank (In-Memory PCM)</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-md font-sans">
+                Paste any local audio path above (e.g. <code>C:\Sounds\meme.mp3</code>) to arm custom sound clips. Audio is decoded with <code>symphonia</code> into raw RAM for zero-latency instant hotkeys.
+              </p>
+            </div>
+
+            {/* Quick Starter Sound Pack */}
+            <div className="bg-[#0C1220]/90 rounded-2xl border border-slate-800/90 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                  <h4 className="text-xs font-mono font-bold text-slate-200 uppercase tracking-wide">
+                    Suggested Soundboard Hotkeys
+                  </h4>
+                </div>
+                <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30">
+                  READY FOR CUSTOM FILES
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                {[
+                  { name: 'Airhorn Blast', file: 'C:\Sounds\airhorn.mp3', hotkey: 'NUM1', badge: 'Meme' },
+                  { name: 'Bruh Sound #2', file: 'C:\Sounds\bruh.mp3', hotkey: 'NUM2', badge: 'Reaction' },
+                  { name: 'Victory Horn', file: 'C:\Sounds\victory.mp3', hotkey: 'NUM3', badge: 'Win' },
+                  { name: 'Sad Trombone', file: 'C:\Sounds\trombone.mp3', hotkey: 'NUM4', badge: 'Fail' },
+                ].map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-[#121B2F]/80 border border-slate-800/80 hover:border-slate-700 rounded-xl p-3 flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex justify-between items-center text-[10px] font-mono mb-1">
+                        <span className="text-emerald-400 font-bold">{item.badge}</span>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-slate-400 font-bold">{item.hotkey}</span>
+                      </div>
+                      <h5 className="text-xs font-bold text-slate-200 font-mono">{item.name}</h5>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFilePathInput(item.file)}
+                      className="mt-3 w-full py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 transition-colors"
+                    >
+                      Use Sample Path
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : (
           slots.map((slot) => (

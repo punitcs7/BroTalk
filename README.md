@@ -1,7 +1,7 @@
 # BroTalk ⚡
 > **Low-Latency (<15ms) System-Wide Windows Voice Changer, Soundboard & EchoPrank Sampler**
 
-![BroTalk Version](https://img.shields.io/badge/version-1.0.0-cyan?style=for-the-badge)
+![BroTalk Version](https://img.shields.io/badge/version-1.1.0-cyan?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-blue?style=for-the-badge&logo=windows)
 ![Framework](https://img.shields.io/badge/Tauri-v2.0-orange?style=for-the-badge&logo=tauri)
 ![Engine](https://img.shields.io/badge/Rust-WASAPI%20DSP-red?style=for-the-badge&logo=rust)
@@ -35,6 +35,12 @@
 - **Instant Hotkey Clipping (`Ctrl + Shift + R`):** Slices the last 5 to 15 seconds into an armed prank pad.
 - **Instant Mic Stream Injection (`Ctrl + Shift + P`):** Broadcasts your friend's clipped speech right back into the virtual microphone stream in real-time.
 - **Trimmer & Modifiers:** Visual waveform peak display, trimming handles, pitch shifting, and looping.
+
+
+### 4. 🎛️ Neon Dual-Deck Studio (New in v1.1.0)
+- **60 FPS Real-Time Audio Visualizer:** High-performance HTML5 Canvas spectrum analyzer showing animated multi-band FFT frequency bars (60Hz to 16kHz) and dynamic digital oscilloscope waveform. Supports **Hybrid**, **FFT**, and **Wave** rendering modes.
+- **12-Pad RGB Action Soundboard Grid:** Zero-latency procedural sound pads with instant hotkey triggers (NumPad `1`–`9`, `0`, `-`, `Esc`) including Airhorn, Bruh, GG WP, Headshot, Laugh, Drum Roll, Sad Trombone, Siren, Wow, and Panic Stop.
+- **EchoPrank Tape Vault:** Quick-access slots for saved friend voice clips and live WASAPI signal telemetry.
 
 ### 3. 🔊 Soundboard with Hotkeys
 - **Supported Formats:** MP3, WAV, OGG, and FLAC (decoded directly into RAM via `symphonia`).
