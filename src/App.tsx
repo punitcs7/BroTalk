@@ -21,7 +21,7 @@ import { useUpdater } from './hooks/useUpdater';
 export const isTauri = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__);
 
 // Tauri IPC wrapper with browser fallback
-async function tauriInvoke<T>(cmd: string, args: Record<string, any> = {}): Promise<T> {
+export async function tauriInvoke<T>(cmd: string, args: Record<string, any> = {}): Promise<T> {
   if (isTauri) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -68,7 +68,7 @@ async function tauriInvoke<T>(cmd: string, args: Record<string, any> = {}): Prom
       active_monitor_name: 'Speakers (Razer Kraken Ultimate)',
     } as unknown as T;
   }
-    if (cmd === 'echoprank_clip' || cmd === 'echoprank_stop_record') {
+    if (cmd === 'echoprank_clip' || cmd === 'echoprank_stop_record' || cmd === 'echoprank_play_vault') {
       const peaks = Array.from({ length: 120 }, () => Math.random() * 0.85);
       return {
         duration_secs: args.durationSecs || 10.0,
@@ -78,6 +78,22 @@ async function tauriInvoke<T>(cmd: string, args: Record<string, any> = {}): Prom
         is_armed: true,
       } as unknown as T;
     }
+  if (cmd === 'echoprank_get_vault_slots') {
+    return [
+      { id: '1', name: 'Discord Screamer', duration_secs: 3.2, hotkey: 'Ctrl+1' },
+      { id: '2', name: 'Party Chat Laugh', duration_secs: 4.8, hotkey: 'Ctrl+2' },
+      { id: '3', name: 'Rage Quit Sigh', duration_secs: 2.5, hotkey: 'Ctrl+3' },
+      { id: '4', name: 'Whimper / Confusion', duration_secs: 5.0, hotkey: 'Ctrl+4' },
+    ] as unknown as T;
+  }
+  if (cmd === 'echoprank_save_vault') {
+    return {
+      id: args.slotId || '1',
+      name: args.name || 'Friend Clip',
+      duration_secs: 10.0,
+      hotkey: `Ctrl+${args.slotId || '1'}`,
+    } as unknown as T;
+  }
   if (cmd === 'soundboard_get_slots') {
     return [] as unknown as T;
   }
@@ -236,6 +252,118 @@ export const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [telemetry, dspParams]);
+
+  // Global OS-level hotkey listener (works even when Discord or full-screen game is focused)
+  useEffect(() => {
+    if (!isTauri) return;
+
+    async function initGlobalShortcuts() {
+      try {
+        const { register, unregisterAll } = await import('@tauri-apps/plugin-global-shortcut');
+        await unregisterAll();
+
+        // 1. Clip last 10s: Ctrl+Shift+R
+        try {
+          await register('Control+Shift+R', (event) => {
+            if (event.state === 'Pressed') {
+              handleClip(10);
+            }
+          });
+        } catch (_) {}
+
+        // 2. Inject prank into mic: Ctrl+Shift+P
+        try {
+          await register('Control+Shift+P', (event) => {
+            if (event.state === 'Pressed') {
+              handlePlayPrank({
+                trim_start: 0.0,
+                trim_end: 1.0,
+                pitch_semitones: 0.0,
+                stutter: false,
+                looping: false,
+                volume: 1.2,
+              });
+            }
+          });
+        } catch (_) {}
+
+        // 3. Hold to record friend: Ctrl+Shift+E
+        try {
+          await register('Control+Shift+E', (event) => {
+            if (event.state === 'Pressed') {
+              handleStartRecord();
+            } else if (event.state === 'Released') {
+              handleStopRecord();
+            }
+          });
+        } catch (_) {}
+
+        // 4. Mute toggle: Ctrl+Shift+M
+        try {
+          await register('Control+Shift+M', (event) => {
+            if (event.state === 'Pressed') {
+              handleToggleMute();
+            }
+          });
+        } catch (_) {}
+
+        // 5. Bypass toggle: Ctrl+Shift+B
+        try {
+          await register('Control+Shift+B', (event) => {
+            if (event.state === 'Pressed') {
+              handleToggleBypass();
+            }
+          });
+        } catch (_) {}
+
+        // 6. Escape: Panic stop
+        try {
+          await register('Escape', (event) => {
+            if (event.state === 'Pressed') {
+              handleStopAllSoundboard();
+            }
+          });
+        } catch (_) {}
+
+        // 7. NumPad quick soundboard triggers
+        const numpadPads: Record<string, string> = {
+          'Numpad1': 'airhorn',
+          'Numpad2': 'bruh',
+          'Numpad3': 'victory',
+          'Numpad4': 'headshot',
+          'Numpad5': 'laugh',
+          'Numpad6': 'drumroll',
+          'Numpad7': 'sadtrombone',
+          'Numpad8': 'siren',
+          'Numpad9': 'wow',
+          'Numpad0': 'denied',
+          'NumpadSubtract': 'levelup',
+        };
+
+        for (const [key, sfx] of Object.entries(numpadPads)) {
+          try {
+            await register(key, (event) => {
+              if (event.state === 'Pressed') {
+                tauriInvoke('soundboard_play_sfx', { sfxType: sfx });
+              }
+            });
+          } catch (_) {}
+        }
+      } catch (err) {
+        console.warn('Global shortcuts setup notice:', err);
+      }
+    }
+
+    initGlobalShortcuts();
+
+    return () => {
+      if (isTauri) {
+        import('@tauri-apps/plugin-global-shortcut').then(({ unregisterAll }) => {
+          unregisterAll().catch(() => {});
+        }).catch(() => {});
+      }
+    };
+  }, [telemetry]);
 
   // Handlers
   const handleSelectInput = async (id: string) => {
@@ -521,6 +649,7 @@ export const App: React.FC = () => {
             onStopRecord={handleStopRecord}
             onPlay={handlePlayPrank}
             onStop={handleStopPrank}
+            onClipInfoUpdate={(info) => setClipInfo(info)}
           />
         )}
 

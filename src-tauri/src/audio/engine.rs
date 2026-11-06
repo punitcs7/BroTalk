@@ -174,7 +174,7 @@ impl AudioEngineState {
         let in_level = self.input_level_bits.clone();
         let is_muted = self.is_muted.clone();
 
-        // Noise gate threshold: Any room background noise or ADC hiss below 0.012 drops to true 0.0
+        // Noise gate threshold: Any room background noise or ADC hiss below 0.015 drops to true 0.0
         const NOISE_GATE_THRESHOLD: f32 = 0.015;
 
         // A. Capture Stream (Physical Mic -> Downmix to Mono)
@@ -252,7 +252,6 @@ impl AudioEngineState {
             .map_err(|e| format!("Failed to build stream for virtual cable '{}': {}", actual_virt_name, e))?;
 
         // C. Monitor Headphones Stream
-        let hear_myself = self.hear_myself.clone();
         let monitor_stream = if let Some(ref mon_dev) = monitor_device {
             if let Ok(mon_supp) = mon_dev.default_output_config() {
                 let mon_channels = mon_supp.channels() as usize;
@@ -261,26 +260,21 @@ impl AudioEngineState {
                     .build_output_stream(
                         &mon_cfg,
                         move |data: &mut [f32], _| {
-                            let active = hear_myself.load(Ordering::Relaxed);
                             for frame in data.chunks_mut(mon_channels) {
                                 let left = cons_mon.try_pop().unwrap_or(0.0);
                                 let right = cons_mon.try_pop().unwrap_or(left);
 
-                                if active {
-                                    if mon_channels == 1 {
-                                        frame[0] = (left + right) * 0.5;
-                                    } else if mon_channels == 2 {
-                                        frame[0] = left;
-                                        frame[1] = right;
-                                    } else {
-                                        frame[0] = left;
-                                        frame[1] = right;
-                                        for s in &mut frame[2..] {
-                                            *s = 0.0;
-                                        }
-                                    }
+                                if mon_channels == 1 {
+                                    frame[0] = (left + right) * 0.5;
+                                } else if mon_channels == 2 {
+                                    frame[0] = left;
+                                    frame[1] = right;
                                 } else {
-                                    frame.fill(0.0);
+                                    frame[0] = left;
+                                    frame[1] = right;
+                                    for s in &mut frame[2..] {
+                                        *s = 0.0;
+                                    }
                                 }
                             }
                         },
@@ -295,7 +289,68 @@ impl AudioEngineState {
             None
         };
 
-        // D. DSP Processing Thread
+        // D. WASAPI Loopback Capture Stream (Friend Voice from Discord / Party Chat)
+        let default_out = host.default_output_device();
+        let loopback_dev_opt = monitor_device.as_ref().or(default_out.as_ref());
+        let echoprank_capture = self.echoprank.clone();
+        let loopback_stream = if let Some(loopback_dev) = loopback_dev_opt {
+            if let Ok(mon_output_cfg) = loopback_dev.default_output_config() {
+                let channels = mon_output_cfg.channels() as usize;
+                let stream_cfg = mon_output_cfg.clone().into();
+                let ep_buf = echoprank_capture.clone();
+
+                match mon_output_cfg.sample_format() {
+                    cpal::SampleFormat::F32 => {
+                        loopback_dev.build_input_stream(
+                            &stream_cfg,
+                            move |data: &[f32], _| {
+                                let mut stereo = Vec::with_capacity(data.len() / channels.max(1) * 2);
+                                for frame in data.chunks(channels) {
+                                    if channels == 1 {
+                                        stereo.push(frame[0]);
+                                        stereo.push(frame[0]);
+                                    } else if channels >= 2 {
+                                        stereo.push(frame[0]);
+                                        stereo.push(frame[1]);
+                                    }
+                                }
+                                ep_buf.lock().0.push_samples(&stereo);
+                            },
+                            |err| eprintln!("WASAPI Loopback capture error: {}", err),
+                            None,
+                        ).ok()
+                    }
+                    cpal::SampleFormat::I16 => {
+                        loopback_dev.build_input_stream(
+                            &stream_cfg,
+                            move |data: &[i16], _| {
+                                let mut stereo = Vec::with_capacity(data.len() / channels.max(1) * 2);
+                                for frame in data.chunks(channels) {
+                                    if channels == 1 {
+                                        let s = frame[0] as f32 / 32768.0;
+                                        stereo.push(s);
+                                        stereo.push(s);
+                                    } else if channels >= 2 {
+                                        stereo.push(frame[0] as f32 / 32768.0);
+                                        stereo.push(frame[1] as f32 / 32768.0);
+                                    }
+                                }
+                                ep_buf.lock().0.push_samples(&stereo);
+                            },
+                            |err| eprintln!("WASAPI Loopback capture error: {}", err),
+                            None,
+                        ).ok()
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // E. DSP Processing & Mixing Thread
         let is_running = self.is_running.clone();
         is_running.store(true, Ordering::SeqCst);
 
@@ -303,6 +358,7 @@ impl AudioEngineState {
         let echoprank = self.echoprank.clone();
         let soundboard = self.soundboard.clone();
         let is_bypassed = self.is_bypassed.clone();
+        let hear_myself = self.hear_myself.clone();
         let latency_bits = self.latency_ms_bits.clone();
 
         thread::spawn(move || {
@@ -326,9 +382,11 @@ impl AudioEngineState {
                         *s = val;
                         samples_read += 1;
                     } else {
-                        *s = 0.0;
+                        break;
                     }
                 }
+
+                let hear_mic = hear_myself.load(Ordering::Relaxed);
 
                 if samples_read > 0 {
                     let active_slice = &mut process_buf[..samples_read];
@@ -346,21 +404,54 @@ impl AudioEngineState {
                         let (prank_l, prank_r) = prank_frame.unwrap_or((0.0, 0.0));
                         let (sb_l, sb_r) = sb_frame;
 
-                        let final_l = (mic_s + prank_l + sb_l).clamp(-1.0, 1.0);
-                        let final_r = (mic_s + prank_r + sb_r).clamp(-1.0, 1.0);
+                        let cable_l = (mic_s + prank_l + sb_l).clamp(-1.0, 1.0);
+                        let cable_r = (mic_s + prank_r + sb_r).clamp(-1.0, 1.0);
 
-                        let _ = prod_cable.try_push(final_l);
-                        let _ = prod_cable.try_push(final_r);
+                        let mon_mic = if hear_mic { mic_s } else { 0.0 };
+                        let mon_l = (mon_mic + prank_l + sb_l).clamp(-1.0, 1.0);
+                        let mon_r = (mon_mic + prank_r + sb_r).clamp(-1.0, 1.0);
 
-                        let _ = prod_mon.try_push(final_l);
-                        let _ = prod_mon.try_push(final_r);
+                        let _ = prod_cable.try_push(cable_l);
+                        let _ = prod_cable.try_push(cable_r);
+
+                        let _ = prod_mon.try_push(mon_l);
+                        let _ = prod_mon.try_push(mon_r);
                     }
 
                     let elapsed = start_time.elapsed().as_secs_f32() * 1000.0;
                     let total_latency = 4.8 + elapsed;
                     latency_bits.store(total_latency.to_bits(), Ordering::Relaxed);
                 } else {
-                    thread::sleep(Duration::from_micros(500));
+                    // Decoupled playback: when mic is silent, continuously mix Soundboard & EchoPrank
+                    let mut mixed_any = false;
+                    for _ in 0..64 {
+                        let prank_frame = echoprank.lock().1.next_frame();
+                        let sb_frame = soundboard.lock().next_frame();
+
+                        let has_prank = prank_frame.is_some();
+                        let has_sb = sb_frame != (0.0, 0.0);
+
+                        if has_prank || has_sb {
+                            mixed_any = true;
+                            let (prank_l, prank_r) = prank_frame.unwrap_or((0.0, 0.0));
+                            let (sb_l, sb_r) = sb_frame;
+
+                            let cable_l = (prank_l + sb_l).clamp(-1.0, 1.0);
+                            let cable_r = (prank_r + sb_r).clamp(-1.0, 1.0);
+
+                            let _ = prod_cable.try_push(cable_l);
+                            let _ = prod_cable.try_push(cable_r);
+
+                            let _ = prod_mon.try_push(cable_l);
+                            let _ = prod_mon.try_push(cable_r);
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if !mixed_any {
+                        thread::sleep(Duration::from_micros(600));
+                    }
                 }
             }
 
@@ -373,6 +464,11 @@ impl AudioEngineState {
         if let Some(ref mon) = monitor_stream {
             let _ = mon.play();
         }
+        if let Some(ref lb) = loopback_stream {
+            if let Err(e) = lb.play() {
+                eprintln!("WASAPI Loopback stream play warning: {}", e);
+            }
+        }
 
         let mut streams_guard = self.streams.lock();
         streams_guard.0.clear();
@@ -380,6 +476,9 @@ impl AudioEngineState {
         streams_guard.0.push(cable_stream);
         if let Some(mon) = monitor_stream {
             streams_guard.0.push(mon);
+        }
+        if let Some(lb) = loopback_stream {
+            streams_guard.0.push(lb);
         }
 
         *self.engine_error.lock() = None;
@@ -472,6 +571,9 @@ fn revert_mmcss(handle: usize) {
 
 #[cfg(not(windows))]
 fn set_mmcss_pro_audio() -> usize { 0 }
+#[cfg(not(windows))]
+fn revert_mmcss(_handle: usize) {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -490,4 +592,3 @@ mod tests {
         engine.stop_engine();
     }
 }
-

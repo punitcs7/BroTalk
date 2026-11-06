@@ -341,6 +341,36 @@ export const RoutingModal: React.FC<RoutingModalProps> = ({
             </div>
           </div>
 
+          {/* Discord Voice & Video Recommended Configuration */}
+          <div className="bg-[#121B2F] border border-cyan-500/40 rounded-2xl p-4 flex items-start gap-3.5">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 flex-shrink-0 mt-0.5">
+              <Radio className="w-4 h-4" />
+            </div>
+            <div className="text-xs text-slate-300 space-y-2 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-cyan-300 font-mono text-xs uppercase tracking-wider">
+                  Discord Voice & Video Setup:
+                </span>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">
+                  CRITICAL FOR VOICE CHANGER & SOUNDBOARD
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-slate-200">
+                <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                  <span className="text-slate-400 block text-[10px] mb-0.5">1. INPUT DEVICE:</span>
+                  <strong className="text-cyan-300">CABLE Output (VB-Audio Virtual Cable)</strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                  <span className="text-slate-400 block text-[10px] mb-0.5">2. INPUT PROFILE:</span>
+                  <strong className="text-emerald-400">Studio (Pure audio, no processing)</strong>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+                💡 <strong>Why Studio Mode?</strong> Discord's default <em>"Voice Isolation" (Krisp AI)</em> treats pitch shifting, sub-bass, robot modulations, and soundboard effects as background noise and aggressively mutes them. Setting Discord to <strong>Studio</strong> mode (or Custom with Krisp disabled) lets your friends hear all your effects crystal clear!
+              </p>
+            </div>
+          </div>
+
           {/* Important Razer / Sidetone Note */}
           <div className="bg-[#141B2D] border border-cyan-500/30 rounded-2xl p-4 flex items-start gap-3.5">
             <AlertTriangle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />

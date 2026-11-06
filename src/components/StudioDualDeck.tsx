@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Activity, Volume2, Sparkles } from 'lucide-react';
 import { AudioTelemetry } from '../types';
+import { tauriInvoke } from '../App';
 
 interface StudioDualDeckProps {
   telemetry: AudioTelemetry;
@@ -461,16 +462,26 @@ export const StudioDualDeck: React.FC<StudioDualDeckProps> = ({
     return () => cancelAnimationFrame(animId);
   }, [visualizerMode, sensitivity, telemetry.input_level]);
 
-  // Sound pad trigger handler
-  const handleTriggerPad = (pad: SoundPad) => {
+  // Sound pad trigger handler (routes directly to Virtual Cable & Discord via Rust DSP)
+  const handleTriggerPad = async (pad: SoundPad) => {
     setActivePadId(pad.id);
     setTimeout(() => setActivePadId(null), 250);
 
     if (pad.type === 'panic') {
+      try {
+        await tauriInvoke('soundboard_stop_all');
+      } catch (e) {
+        console.error(e);
+      }
       sfxEngine.panicStop();
       if (onPanicStop) onPanicStop();
     } else {
-      sfxEngine.play(pad.type, padVolume);
+      try {
+        await tauriInvoke('soundboard_play_sfx', { sfxType: pad.type });
+      } catch (e) {
+        console.warn('[IPC soundboard_play_sfx fallback]', e);
+        sfxEngine.play(pad.type, padVolume);
+      }
     }
   };
 

@@ -1,5 +1,6 @@
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,6 +10,14 @@ pub struct EchoPrankClipInfo {
     pub channels: u16,
     pub waveform_peaks: Vec<f32>,
     pub is_armed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultSlotInfo {
+    pub id: String,
+    pub name: String,
+    pub duration_secs: f32,
+    pub hotkey: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,10 +51,47 @@ pub struct ActivePrankPad {
     pub play_cursor: f64,
     pub is_playing: bool,
     pub stutter_count: u32,
+    pub vault_slots: HashMap<String, (String, Vec<f32>, f32)>,
 }
 
 impl ActivePrankPad {
     pub fn new() -> Self {
+        let mut vault_slots = HashMap::new();
+
+        // Initialize the 4 Prank Tape Vault slots with comedy prank clips
+        vault_slots.insert(
+            "1".to_string(),
+            (
+                "Discord Screamer".to_string(),
+                generate_vault_sfx("screamer", 48000.0),
+                3.2,
+            ),
+        );
+        vault_slots.insert(
+            "2".to_string(),
+            (
+                "Party Chat Laugh".to_string(),
+                generate_vault_sfx("laugh", 48000.0),
+                4.8,
+            ),
+        );
+        vault_slots.insert(
+            "3".to_string(),
+            (
+                "Rage Quit Sigh".to_string(),
+                generate_vault_sfx("ragequit", 48000.0),
+                2.5,
+            ),
+        );
+        vault_slots.insert(
+            "4".to_string(),
+            (
+                "Whimper / Confusion".to_string(),
+                generate_vault_sfx("whimper", 48000.0),
+                5.0,
+            ),
+        );
+
         Self {
             samples: Vec::new(),
             sample_rate: 48000,
@@ -54,6 +100,7 @@ impl ActivePrankPad {
             play_cursor: 0.0,
             is_playing: false,
             stutter_count: 0,
+            vault_slots,
         }
     }
 
@@ -83,6 +130,60 @@ impl ActivePrankPad {
         self.is_playing = false;
         self.play_cursor = 0.0;
         self.stutter_count = 0;
+    }
+
+    pub fn play_vault(&mut self, slot_id: &str) -> Option<EchoPrankClipInfo> {
+        if let Some((_, pcm, _)) = self.vault_slots.get(slot_id).cloned() {
+            self.arm(pcm, 48000, 2);
+            self.trigger_play(None);
+            let total_frames = self.samples.len() / (self.channels as usize).max(1);
+            let duration = total_frames as f32 / self.sample_rate as f32;
+            Some(EchoPrankClipInfo {
+                duration_secs: duration,
+                sample_rate: self.sample_rate,
+                channels: self.channels,
+                waveform_peaks: self.get_waveform_peaks(120),
+                is_armed: true,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn save_current_to_vault(&mut self, slot_id: &str, custom_name: Option<String>) -> Result<VaultSlotInfo, String> {
+        if self.samples.is_empty() {
+            return Err("No clip is armed. First capture friend voice or trigger a clip.".to_string());
+        }
+        let total_frames = self.samples.len() / (self.channels as usize).max(1);
+        let duration = total_frames as f32 / self.sample_rate as f32;
+        let name = custom_name.unwrap_or_else(|| format!("Friend Clip {}", slot_id));
+
+        self.vault_slots.insert(
+            slot_id.to_string(),
+            (name.clone(), self.samples.clone(), duration),
+        );
+
+        Ok(VaultSlotInfo {
+            id: slot_id.to_string(),
+            name,
+            duration_secs: duration,
+            hotkey: format!("Ctrl+{}", slot_id),
+        })
+    }
+
+    pub fn get_vault_slots(&self) -> Vec<VaultSlotInfo> {
+        let mut slots = Vec::new();
+        for id in &["1", "2", "3", "4"] {
+            if let Some((name, _, duration)) = self.vault_slots.get(*id) {
+                slots.push(VaultSlotInfo {
+                    id: id.to_string(),
+                    name: name.clone(),
+                    duration_secs: *duration,
+                    hotkey: format!("Ctrl+{}", id),
+                });
+            }
+        }
+        slots
     }
 
     /// Read next audio frame with pitch/stutter/trim manipulation
@@ -246,4 +347,130 @@ pub fn create_echoprank_engine(sample_rate: u32, channels: u16) -> SharedEchoPra
     let buf = EchoPrankBuffer::new(sample_rate, channels, 30);
     let pad = ActivePrankPad::new();
     Arc::new(Mutex::new((buf, pad)))
+}
+
+/// Synthesize hilarious reaction audio clips for the Prank Tape Vault (48kHz stereo)
+fn generate_vault_sfx(clip_type: &str, sample_rate: f32) -> Vec<f32> {
+    use std::f32::consts::PI;
+    let mut pcm = Vec::new();
+
+    match clip_type {
+        "screamer" => {
+            // Chaotic high-frequency pitched scream prank (3.2s)
+            let duration = 3.2;
+            let total_samples = (sample_rate * duration) as usize;
+
+            for i in 0..total_samples {
+                let t = i as f32 / sample_rate;
+                // Wild frequency modulation between 650 Hz and 2200 Hz
+                let f_mod = 1200.0 + 800.0 * (t * 2.0 * PI * 8.5).sin() + 300.0 * (t * 2.0 * PI * 22.0).sin();
+                let osc1 = (t * 2.0 * PI * f_mod).sin();
+                let osc2 = (t * 2.0 * PI * (f_mod * 1.5)).sin() * 0.4;
+                let harsh = (osc1 + osc2).clamp(-0.8, 0.8) * 1.2;
+
+                let env = if t < 0.08 {
+                    t / 0.08
+                } else if t > 2.8 {
+                    (1.0 - (t - 2.8) / 0.4).max(0.0)
+                } else {
+                    1.0
+                };
+
+                let val = (harsh * env * 0.65).clamp(-0.95, 0.95);
+                pcm.push(val);
+                pcm.push(val);
+            }
+        }
+        "laugh" => {
+            // Party chat giggling laughter loop (4.8s)
+            let duration = 4.8;
+            let total_samples = (sample_rate * duration) as usize;
+
+            for i in 0..total_samples {
+                let t = i as f32 / sample_rate;
+                let chuckle_cycle = (t * 4.5) % 1.0;
+                let f = 340.0 + 120.0 * (t * 2.0 * PI * 0.8).sin() - chuckle_cycle * 90.0;
+                let osc = 2.0 * ((t * f) % 1.0) - 1.0;
+                let formant = (t * 2.0 * PI * 750.0).sin() * 0.5;
+
+                let chuckle_env = (1.0 - (chuckle_cycle - 0.5).abs() * 2.0).max(0.0);
+                let overall_env = if t < 0.1 {
+                    t / 0.1
+                } else if t > 4.4 {
+                    (1.0 - (t - 4.4) / 0.4).max(0.0)
+                } else {
+                    1.0
+                };
+
+                let val = ((osc + formant) * chuckle_env * overall_env * 0.45).clamp(-0.95, 0.95);
+                pcm.push(val);
+                pcm.push(val);
+            }
+        }
+        "ragequit" => {
+            // Heavy sigh + violent desk slam thud (2.5s)
+            let duration = 2.5;
+            let total_samples = (sample_rate * duration) as usize;
+
+            for i in 0..total_samples {
+                let t = i as f32 / sample_rate;
+                let val = if t < 0.9 {
+                    // Filtered breath / sigh noise
+                    let noise = (((i * 1103515245 + 12345) & 0x7FFFFFFF) as f32 / 0x7FFFFFFF as f32) * 2.0 - 1.0;
+                    let breath_env = (t / 0.45).min(1.0) * (1.0 - (t - 0.45).max(0.0) / 0.45);
+                    noise * breath_env * 0.28
+                } else {
+                    // Desk slam impact at t = 0.9
+                    let slam_t = t - 0.9;
+                    let sub = (slam_t * 2.0 * PI * (65.0 * (-8.0 * slam_t).exp() + 45.0)).sin();
+                    let snap_noise = (((i * 1664525 + 1013904223) & 0x7FFFFFFF) as f32 / 0x7FFFFFFF as f32) * 2.0 - 1.0;
+                    let impact_env = (-14.0 * slam_t).exp();
+                    let rumble_env = (-3.2 * slam_t).exp();
+
+                    sub * rumble_env * 0.75 + snap_noise * impact_env * 0.55
+                };
+
+                let clamped = val.clamp(-0.95, 0.95);
+                pcm.push(clamped);
+                pcm.push(clamped);
+            }
+        }
+        "whimper" => {
+            // Pitch-sliding comic confusion whimper "Whaaaat?!" (5.0s)
+            let duration = 5.0;
+            let total_samples = (sample_rate * duration) as usize;
+
+            for i in 0..total_samples {
+                let t = i as f32 / sample_rate;
+                let cycle = (t / 2.5) % 1.0;
+                let f = 550.0 + (cycle * 600.0) + 25.0 * (t * 2.0 * PI * 11.0).sin();
+                let sine = (t * 2.0 * PI * f).sin();
+                let formant = (t * 2.0 * PI * (f * 1.6)).sin() * 0.35;
+
+                let env = if cycle < 0.15 {
+                    cycle / 0.15
+                } else if cycle > 0.85 {
+                    (1.0 - (cycle - 0.85) / 0.15).max(0.0)
+                } else {
+                    1.0
+                };
+
+                let val = ((sine + formant) * env * 0.45).clamp(-0.95, 0.95);
+                pcm.push(val);
+                pcm.push(val);
+            }
+        }
+        _ => {
+            let duration = 1.0;
+            let total_samples = (sample_rate * duration) as usize;
+            for i in 0..total_samples {
+                let t = i as f32 / sample_rate;
+                let val = (t * 2.0 * PI * 440.0).sin() * (-3.0 * t).exp() * 0.3;
+                pcm.push(val);
+                pcm.push(val);
+            }
+        }
+    }
+
+    pcm
 }

@@ -76,3 +76,10 @@ export interface SoundboardSlot {
   duration_secs: number;
   overlap_mode: 'CutPrevious' | 'Polyphonic';
 }
+
+export interface VaultSlotInfo {
+  id: string;
+  name: string;
+  duration_secs: number;
+  hotkey: string;
+}

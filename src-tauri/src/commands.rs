@@ -1,6 +1,6 @@
 use crate::audio::device_manager::{DeviceCatalog, DeviceManager};
 use crate::audio::dsp::DspParams;
-use crate::audio::echoprank::{EchoPrankClipInfo, PlaybackOptions};
+use crate::audio::echoprank::{EchoPrankClipInfo, PlaybackOptions, VaultSlotInfo};
 use crate::audio::engine::{AudioEngineState, AudioTelemetry};
 use crate::audio::soundboard::SoundboardSlot;
 use std::sync::atomic::Ordering;
@@ -144,6 +144,39 @@ pub fn echoprank_get_clip_info(state: State<'_, AudioEngineState>) -> EchoPrankC
         waveform_peaks: pad.get_waveform_peaks(120),
         is_armed: !pad.samples.is_empty(),
     }
+}
+
+#[tauri::command]
+pub fn echoprank_play_vault(
+    state: State<'_, AudioEngineState>,
+    slot_id: String,
+) -> Result<EchoPrankClipInfo, String> {
+    let mut guard = state.echoprank.lock();
+    guard.1.play_vault(&slot_id).ok_or_else(|| format!("Vault slot '{}' not found", slot_id))
+}
+
+#[tauri::command]
+pub fn echoprank_save_vault(
+    state: State<'_, AudioEngineState>,
+    slot_id: String,
+    name: Option<String>,
+) -> Result<VaultSlotInfo, String> {
+    let mut guard = state.echoprank.lock();
+    guard.1.save_current_to_vault(&slot_id, name)
+}
+
+#[tauri::command]
+pub fn echoprank_get_vault_slots(
+    state: State<'_, AudioEngineState>,
+) -> Vec<VaultSlotInfo> {
+    let guard = state.echoprank.lock();
+    guard.1.get_vault_slots()
+}
+
+#[tauri::command]
+pub fn soundboard_play_sfx(state: State<'_, AudioEngineState>, sfx_type: String) {
+    let mut sb = state.soundboard.lock();
+    sb.play_sfx(&sfx_type);
 }
 
 #[tauri::command]
