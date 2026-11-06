@@ -50,7 +50,7 @@ impl SoundboardEngine {
             samples: std::collections::HashMap::new(),
             active_playbacks: Vec::new(),
             overlap_mode: OverlapMode::Polyphonic,
-            master_volume: 1.0,
+            master_volume: 1.2,
         };
 
         // Preload procedural gamer sound pads at 48 kHz stereo into RAM
@@ -305,11 +305,11 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                             (-5.0 * (note_t - 0.38)).exp().max(0.0)
                         };
 
-                        sum += saw * env * 0.22;
+                        sum += saw * env * 0.45;
                     }
                 }
 
-                let clamped = sum.clamp(-0.95, 0.95);
+                let clamped = (sum * 1.2).clamp(-0.95, 0.95);
                 pcm.push(clamped);
                 pcm.push(clamped);
             }
@@ -336,7 +336,7 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                     (-3.5 * (t - 0.02)).exp()
                 };
 
-                let val = (wave * env * 0.55).clamp(-0.95, 0.95);
+                let val = (wave * env * 0.90).clamp(-0.95, 0.95);
                 pcm.push(val);
                 pcm.push(val);
             }
@@ -357,7 +357,7 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                 let ring = (t * 2.0 * PI * 2800.0).sin() * 0.6 + (t * 2.0 * PI * 3600.0).sin() * 0.4;
                 let ring_env = (-8.0 * t).exp();
 
-                let val = ((snap * snap_env * 0.6 + ring * ring_env * 0.4) * 0.8).clamp(-0.95, 0.95);
+                let val = ((snap * snap_env * 0.7 + ring * ring_env * 0.5) * 1.1).clamp(-0.95, 0.95);
                 pcm.push(val);
                 pcm.push(val);
             }
@@ -383,11 +383,11 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                         } else {
                             (-3.8 * (note_t - 0.01)).exp()
                         };
-                        sum += tri * env * 0.32;
+                        sum += tri * env * 0.55;
                     }
                 }
 
-                let val = sum.clamp(-0.95, 0.95);
+                let val = (sum * 1.15).clamp(-0.95, 0.95);
                 pcm.push(val);
                 pcm.push(val);
             }
@@ -421,7 +421,7 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                         (-3.2 * note_t).exp()
                     };
 
-                    let val = (saw * wah * env * 0.45).clamp(-0.95, 0.95);
+                    let val = (saw * wah * env * 0.88).clamp(-0.95, 0.95);
                     pcm.push(val);
                     pcm.push(val);
                 } else {
@@ -454,7 +454,7 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                     1.0
                 };
 
-                let val = (saw * env * 0.42).clamp(-0.95, 0.95);
+                let val = (saw * env * 0.82).clamp(-0.95, 0.95);
                 pcm.push(val);
                 pcm.push(val);
             }
@@ -475,7 +475,7 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                     (-3.5 * t).exp()
                 };
 
-                let val = ((sqr1 + sqr2) * env * 0.45).clamp(-0.95, 0.95);
+                let val = ((sqr1 + sqr2) * env * 0.88).clamp(-0.95, 0.95);
                 pcm.push(val);
                 pcm.push(val);
             }
@@ -502,11 +502,11 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                         } else {
                             (-4.0 * note_t).exp()
                         };
-                        sum += bell * env * 0.28;
+                        sum += bell * env * 0.48;
                     }
                 }
 
-                let val = sum.clamp(-0.95, 0.95);
+                let val = (sum * 1.15).clamp(-0.95, 0.95);
                 pcm.push(val);
                 pcm.push(val);
             }
@@ -531,11 +531,11 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                 let snare = (pseudo_noise * 0.7 + body) * hit_env;
 
                 let val = if t < 0.62 {
-                    snare * 0.45
+                    snare * 0.85
                 } else {
                     // Final crash
                     let crash_t = t - 0.62;
-                    let crash = pseudo_noise * (-5.0 * crash_t).exp() * 0.6;
+                    let crash = pseudo_noise * (-5.0 * crash_t).exp() * 0.90;
                     crash
                 };
 
@@ -559,7 +559,7 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                     let saw = 2.0 * ((chuckle_t * f) % 1.0) - 1.0;
                     let formant = (chuckle_t * 2.0 * PI * 650.0).sin() * 0.5;
                     let env = (1.0 - (chuckle_t - 0.085).abs() / 0.085).max(0.0);
-                    ((saw + formant) * env * 0.38).clamp(-0.95, 0.95)
+                    ((saw + formant) * env * 0.78).clamp(-0.95, 0.95)
                 } else {
                     0.0
                 };
@@ -590,7 +590,7 @@ fn generate_procedural_sfx(sfx_type: &str, sample_rate: f32) -> Vec<f32> {
                     1.0
                 };
 
-                let val = ((sine + formant) * env * 0.5).clamp(-0.95, 0.95);
+                let val = ((sine + formant) * env * 0.88).clamp(-0.95, 0.95);
                 pcm.push(val);
                 pcm.push(val);
             }

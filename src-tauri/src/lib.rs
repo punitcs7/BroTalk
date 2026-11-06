@@ -37,6 +37,7 @@ pub fn run() {
             commands::soundboard_stop_all,
             commands::soundboard_delete,
             commands::soundboard_set_volume,
+            commands::soundboard_set_master_volume,
             commands::soundboard_set_hotkey,
             commands::soundboard_get_slots,
             commands::get_audio_telemetry,

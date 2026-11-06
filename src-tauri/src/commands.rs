@@ -208,6 +208,12 @@ pub fn soundboard_delete(state: State<'_, AudioEngineState>, slot_id: String) {
 }
 
 #[tauri::command]
+pub fn soundboard_set_master_volume(state: State<'_, AudioEngineState>, volume: f32) {
+    let mut sb = state.soundboard.lock();
+    sb.set_master_volume(volume);
+}
+
+#[tauri::command]
 pub fn soundboard_set_volume(state: State<'_, AudioEngineState>, slot_id: String, volume: f32) {
     let mut sb = state.soundboard.lock();
     sb.set_slot_volume(&slot_id, volume);

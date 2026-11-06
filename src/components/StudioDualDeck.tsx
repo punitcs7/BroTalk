@@ -659,7 +659,11 @@ export const StudioDualDeck: React.FC<StudioDualDeckProps> = ({
                 max="1.5"
                 step="0.05"
                 value={padVolume}
-                onChange={(e) => setPadVolume(parseFloat(e.target.value))}
+                onChange={(e) => {
+                  const vol = parseFloat(e.target.value);
+                  setPadVolume(vol);
+                  tauriInvoke('soundboard_set_master_volume', { volume: vol }).catch(() => {});
+                }}
                 className="w-16 accent-purple-400 h-1 bg-slate-800 rounded-lg cursor-pointer"
               />
               <span className="text-[10px] text-purple-300 w-7">

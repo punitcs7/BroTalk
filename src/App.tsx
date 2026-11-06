@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { VoiceChangerTab } from './components/VoiceChangerTab';
 import { EchoPrankTab } from './components/EchoPrankTab';
@@ -189,181 +189,7 @@ export const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Keyboard shortcut listener (including 0-7 preset quick-selection)
-  useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      // Don't intercept if user is typing in an input
-      if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
-        return;
-      }
-
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyR') {
-        e.preventDefault();
-        handleClip(10);
-      } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyP') {
-        e.preventDefault();
-        handlePlayPrank({
-          trim_start: 0.0,
-          trim_end: 1.0,
-          pitch_semitones: 0.0,
-          stutter: false,
-          looping: false,
-          volume: 1.2,
-        });
-      } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyM') {
-        e.preventDefault();
-        handleToggleMute();
-      } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyB') {
-        e.preventDefault();
-        handleToggleBypass();
-      } else if (e.code === 'Escape') {
-        handleStopAllSoundboard();
-      } else if (!e.ctrlKey && !e.altKey && !e.shiftKey) {
-        // Number keys 0-7 for instant preset selection
-        const keyMap: Record<string, PresetType> = {
-          '0': 'Clean',
-          '1': 'Titan',
-          '2': 'Helium',
-          '3': 'Robot',
-          '4': 'Radio',
-          '5': 'Alien',
-          '6': 'Cathedral',
-          '7': 'Custom',
-        };
-        if (keyMap[e.key]) {
-          const targetPreset = keyMap[e.key];
-          let pitch = dspParams.pitch_semitones;
-          let formant = dspParams.formant_factor;
-          if (targetPreset === 'Titan') { pitch = -6.0; formant = 0.72; }
-          else if (targetPreset === 'Helium') { pitch = 8.5; formant = 1.45; }
-          else if (targetPreset === 'Clean') { pitch = 0.0; formant = 1.0; }
-          else if (targetPreset === 'Robot') { pitch = -1.0; formant = 1.0; }
-
-          handleChangeDspParams({
-            ...dspParams,
-            preset: targetPreset,
-            pitch_semitones: pitch,
-            formant_factor: formant,
-          });
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [telemetry, dspParams]);
-
-  // Global OS-level hotkey listener (works even when Discord or full-screen game is focused)
-  useEffect(() => {
-    if (!isTauri) return;
-
-    async function initGlobalShortcuts() {
-      try {
-        const { register, unregisterAll } = await import('@tauri-apps/plugin-global-shortcut');
-        await unregisterAll();
-
-        // 1. Clip last 10s: Ctrl+Shift+R
-        try {
-          await register('Control+Shift+R', (event) => {
-            if (event.state === 'Pressed') {
-              handleClip(10);
-            }
-          });
-        } catch (_) {}
-
-        // 2. Inject prank into mic: Ctrl+Shift+P
-        try {
-          await register('Control+Shift+P', (event) => {
-            if (event.state === 'Pressed') {
-              handlePlayPrank({
-                trim_start: 0.0,
-                trim_end: 1.0,
-                pitch_semitones: 0.0,
-                stutter: false,
-                looping: false,
-                volume: 1.2,
-              });
-            }
-          });
-        } catch (_) {}
-
-        // 3. Hold to record friend: Ctrl+Shift+E
-        try {
-          await register('Control+Shift+E', (event) => {
-            if (event.state === 'Pressed') {
-              handleStartRecord();
-            } else if (event.state === 'Released') {
-              handleStopRecord();
-            }
-          });
-        } catch (_) {}
-
-        // 4. Mute toggle: Ctrl+Shift+M
-        try {
-          await register('Control+Shift+M', (event) => {
-            if (event.state === 'Pressed') {
-              handleToggleMute();
-            }
-          });
-        } catch (_) {}
-
-        // 5. Bypass toggle: Ctrl+Shift+B
-        try {
-          await register('Control+Shift+B', (event) => {
-            if (event.state === 'Pressed') {
-              handleToggleBypass();
-            }
-          });
-        } catch (_) {}
-
-        // 6. Escape: Panic stop
-        try {
-          await register('Escape', (event) => {
-            if (event.state === 'Pressed') {
-              handleStopAllSoundboard();
-            }
-          });
-        } catch (_) {}
-
-        // 7. NumPad quick soundboard triggers
-        const numpadPads: Record<string, string> = {
-          'Numpad1': 'airhorn',
-          'Numpad2': 'bruh',
-          'Numpad3': 'victory',
-          'Numpad4': 'headshot',
-          'Numpad5': 'laugh',
-          'Numpad6': 'drumroll',
-          'Numpad7': 'sadtrombone',
-          'Numpad8': 'siren',
-          'Numpad9': 'wow',
-          'Numpad0': 'denied',
-          'NumpadSubtract': 'levelup',
-        };
-
-        for (const [key, sfx] of Object.entries(numpadPads)) {
-          try {
-            await register(key, (event) => {
-              if (event.state === 'Pressed') {
-                tauriInvoke('soundboard_play_sfx', { sfxType: sfx });
-              }
-            });
-          } catch (_) {}
-        }
-      } catch (err) {
-        console.warn('Global shortcuts setup notice:', err);
-      }
-    }
-
-    initGlobalShortcuts();
-
-    return () => {
-      if (isTauri) {
-        import('@tauri-apps/plugin-global-shortcut').then(({ unregisterAll }) => {
-          unregisterAll().catch(() => {});
-        }).catch(() => {});
-      }
-    };
-  }, [telemetry]);
+  // Audio Engine & Hardware Handlers
 
   // Handlers
   const handleSelectInput = async (id: string) => {
@@ -475,6 +301,17 @@ export const App: React.FC = () => {
     await tauriInvoke('echoprank_stop');
   };
 
+  const handleTriggerVaultSlot = async (slotId: string) => {
+    try {
+      const info = await tauriInvoke<EchoPrankClipInfo>('echoprank_play_vault', { slotId });
+      if (info) {
+        setClipInfo(info);
+      }
+    } catch (e) {
+      console.error('Trigger vault slot error:', e);
+    }
+  };
+
   const handleLoadSoundboardFile = async (filePath: string) => {
     try {
       const slot = await tauriInvoke<SoundboardSlot>('soundboard_load_file', { path: filePath, slotId: null });
@@ -515,6 +352,294 @@ export const App: React.FC = () => {
     const nextMode = overlapMode === 'CutPrevious' ? 'Polyphonic' : 'CutPrevious';
     setOverlapMode(nextMode);
   };
+
+  const handlersRef = useRef({
+    handleClip,
+    handlePlayPrank,
+    handleStartRecord,
+    handleStopRecord,
+    handleToggleMute,
+    handleToggleBypass,
+    handleStopAllSoundboard,
+    handleTriggerVaultSlot,
+    handleChangeDspParams,
+    dspParams,
+  });
+
+  useEffect(() => {
+    handlersRef.current = {
+      handleClip,
+      handlePlayPrank,
+      handleStartRecord,
+      handleStopRecord,
+      handleToggleMute,
+      handleToggleBypass,
+      handleStopAllSoundboard,
+      handleTriggerVaultSlot,
+      handleChangeDspParams,
+      dspParams,
+    };
+  });
+
+  // Local window keyboard shortcuts
+  useEffect(() => {
+    const soundboardPads: Record<string, string> = {
+      'Numpad1': 'airhorn',
+      'Numpad2': 'bruh',
+      'Numpad3': 'victory',
+      'Numpad4': 'headshot',
+      'Numpad5': 'laugh',
+      'Numpad6': 'drumroll',
+      'Numpad7': 'sadtrombone',
+      'Numpad8': 'siren',
+      'Numpad9': 'wow',
+      'Numpad0': 'denied',
+      'NumpadSubtract': 'levelup',
+    };
+
+    const altKeyPads: Record<string, string> = {
+      '1': 'airhorn',
+      '2': 'bruh',
+      '3': 'victory',
+      '4': 'headshot',
+      '5': 'laugh',
+      '6': 'drumroll',
+      '7': 'sadtrombone',
+      '8': 'siren',
+      '9': 'wow',
+      '0': 'denied',
+      '-': 'levelup',
+    };
+
+    const presetKeys: Record<string, PresetType> = {
+      '0': 'Clean',
+      '1': 'Titan',
+      '2': 'Helium',
+      '3': 'Robot',
+      '4': 'Radio',
+      '5': 'Alien',
+      '6': 'Cathedral',
+      '7': 'Custom',
+    };
+
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      // 1. Ctrl+Shift shortcuts
+      if (e.ctrlKey && e.shiftKey) {
+        if (e.code === 'KeyR') {
+          e.preventDefault();
+          handlersRef.current.handleClip(10);
+        } else if (e.code === 'KeyP') {
+          e.preventDefault();
+          handlersRef.current.handlePlayPrank({
+            trim_start: 0.0,
+            trim_end: 1.0,
+            pitch_semitones: 0.0,
+            stutter: false,
+            looping: false,
+            volume: 1.25,
+          });
+        } else if (e.code === 'KeyM') {
+          e.preventDefault();
+          handlersRef.current.handleToggleMute();
+        } else if (e.code === 'KeyB') {
+          e.preventDefault();
+          handlersRef.current.handleToggleBypass();
+        }
+        return;
+      }
+
+      // 2. Escape: Panic stop
+      if (e.code === 'Escape') {
+        handlersRef.current.handleStopAllSoundboard();
+        return;
+      }
+
+      // 3. Ctrl + 1..4: Prank Tape Vault triggers
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && ['1', '2', '3', '4'].includes(e.key)) {
+        e.preventDefault();
+        handlersRef.current.handleTriggerVaultSlot(e.key);
+        return;
+      }
+
+      // 4. NumPad quick soundboard triggers
+      if (soundboardPads[e.code]) {
+        e.preventDefault();
+        tauriInvoke('soundboard_play_sfx', { sfxType: soundboardPads[e.code] }).catch(() => {});
+        return;
+      }
+
+      // 5. Alt + 1..9, 0, -: Soundboard triggers for laptops/TKL without NumPad
+      if (e.altKey && !e.ctrlKey && !e.shiftKey && altKeyPads[e.key]) {
+        e.preventDefault();
+        tauriInvoke('soundboard_play_sfx', { sfxType: altKeyPads[e.key] }).catch(() => {});
+        return;
+      }
+
+      // 6. Number keys 0-7 (no modifiers): Instant Voice Preset selection
+      if (!e.ctrlKey && !e.altKey && !e.shiftKey && presetKeys[e.key]) {
+        const targetPreset = presetKeys[e.key];
+        const currentDsp = handlersRef.current.dspParams;
+        let pitch = currentDsp.pitch_semitones;
+        let formant = currentDsp.formant_factor;
+        if (targetPreset === 'Titan') { pitch = -6.0; formant = 0.72; }
+        else if (targetPreset === 'Helium') { pitch = 8.5; formant = 1.45; }
+        else if (targetPreset === 'Clean') { pitch = 0.0; formant = 1.0; }
+        else if (targetPreset === 'Robot') { pitch = -1.0; formant = 1.0; }
+
+        handlersRef.current.handleChangeDspParams({
+          ...currentDsp,
+          preset: targetPreset,
+          pitch_semitones: pitch,
+          formant_factor: formant,
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Global OS-level hotkeys (active system-wide even when Discord or games are focused)
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let isSubscribed = true;
+
+    async function initGlobalShortcuts() {
+      try {
+        const { register, unregisterAll } = await import('@tauri-apps/plugin-global-shortcut');
+        await unregisterAll();
+        if (!isSubscribed) return;
+
+        // 1. Clip last 10s: Ctrl+Shift+R
+        try {
+          await register('Control+Shift+R', (event) => {
+            if (event.state === 'Pressed') {
+              handlersRef.current.handleClip(10);
+            }
+          });
+        } catch (_) {}
+
+        // 2. Inject prank into mic: Ctrl+Shift+P
+        try {
+          await register('Control+Shift+P', (event) => {
+            if (event.state === 'Pressed') {
+              handlersRef.current.handlePlayPrank({
+                trim_start: 0.0,
+                trim_end: 1.0,
+                pitch_semitones: 0.0,
+                stutter: false,
+                looping: false,
+                volume: 1.25,
+              });
+            }
+          });
+        } catch (_) {}
+
+        // 3. Hold to record friend: Ctrl+Shift+E
+        try {
+          await register('Control+Shift+E', (event) => {
+            if (event.state === 'Pressed') {
+              handlersRef.current.handleStartRecord();
+            } else if (event.state === 'Released') {
+              handlersRef.current.handleStopRecord();
+            }
+          });
+        } catch (_) {}
+
+        // 4. Mute toggle: Ctrl+Shift+M
+        try {
+          await register('Control+Shift+M', (event) => {
+            if (event.state === 'Pressed') {
+              handlersRef.current.handleToggleMute();
+            }
+          });
+        } catch (_) {}
+
+        // 5. Bypass toggle: Ctrl+Shift+B
+        try {
+          await register('Control+Shift+B', (event) => {
+            if (event.state === 'Pressed') {
+              handlersRef.current.handleToggleBypass();
+            }
+          });
+        } catch (_) {}
+
+        // 6. Escape: Panic stop
+        try {
+          await register('Escape', (event) => {
+            if (event.state === 'Pressed') {
+              handlersRef.current.handleStopAllSoundboard();
+            }
+          });
+        } catch (_) {}
+
+        // 7. Prank Tape Vault triggers (Ctrl+1, Ctrl+2, Ctrl+3, Ctrl+4)
+        const vaultShortcuts: Record<string, string> = {
+          'Control+1': '1',
+          'Control+2': '2',
+          'Control+3': '3',
+          'Control+4': '4',
+          'Control+Digit1': '1',
+          'Control+Digit2': '2',
+          'Control+Digit3': '3',
+          'Control+Digit4': '4',
+        };
+        for (const [key, slotId] of Object.entries(vaultShortcuts)) {
+          try {
+            await register(key, (event) => {
+              if (event.state === 'Pressed') {
+                handlersRef.current.handleTriggerVaultSlot(slotId);
+              }
+            });
+          } catch (_) {}
+        }
+
+        // 8. NumPad quick soundboard triggers
+        const numpadPads: Record<string, string> = {
+          'Numpad1': 'airhorn',
+          'Numpad2': 'bruh',
+          'Numpad3': 'victory',
+          'Numpad4': 'headshot',
+          'Numpad5': 'laugh',
+          'Numpad6': 'drumroll',
+          'Numpad7': 'sadtrombone',
+          'Numpad8': 'siren',
+          'Numpad9': 'wow',
+          'Numpad0': 'denied',
+          'NumpadSubtract': 'levelup',
+        };
+
+        for (const [key, sfx] of Object.entries(numpadPads)) {
+          try {
+            await register(key, (event) => {
+              if (event.state === 'Pressed') {
+                tauriInvoke('soundboard_play_sfx', { sfxType: sfx });
+              }
+            });
+          } catch (_) {}
+        }
+      } catch (err) {
+        console.warn('Global shortcuts setup notice:', err);
+      }
+    }
+
+    initGlobalShortcuts();
+
+    return () => {
+      isSubscribed = false;
+      if (isTauri) {
+        import('@tauri-apps/plugin-global-shortcut').then(({ unregisterAll }) => {
+          unregisterAll().catch(() => {});
+        }).catch(() => {});
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-[#080C14] text-slate-100 font-sans select-none overflow-hidden">
