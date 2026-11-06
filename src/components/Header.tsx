@@ -6,6 +6,8 @@ import {
   Sliders,
   ChevronDown,
   ShieldCheck,
+  RefreshCw,
+  Download,
 } from 'lucide-react';
 import { DeviceCatalog, AudioTelemetry } from '../types';
 
@@ -20,6 +22,18 @@ interface HeaderProps {
   onSelectMonitor: (id: string) => void;
   onToggleHearMyself: () => void;
   onOpenGuide: () => void;
+  updater?: {
+    isChecking: boolean;
+    updateAvailable: boolean;
+    newVersion: string | null;
+    currentVersion: string;
+    isDownloading: boolean;
+    downloadProgress: number;
+    statusMessage: string | null;
+    error: string | null;
+    checkForUpdates: () => void;
+    downloadAndInstall: () => void;
+  };
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,6 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectMonitor,
   onToggleHearMyself,
   onOpenGuide,
+  updater,
 }) => {
   // Input & Output levels (0.0 to 1.0)
   const inLevel = Math.min(100, Math.max(0, Math.round(telemetry.input_level * 100)));
@@ -242,6 +257,43 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
           </div>
+
+          {/* Updater Action Pill */}
+          {updater && (
+            <>
+              {updater.updateAvailable ? (
+                <button
+                  onClick={updater.downloadAndInstall}
+                  disabled={updater.isDownloading}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-500/25 to-teal-500/25 hover:from-emerald-500/35 hover:to-teal-500/35 border border-emerald-400 text-emerald-300 text-xs font-mono font-bold animate-pulse shadow-glow-lime transition-all"
+                  title="Click to install update & restart BroTalk"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>
+                    {updater.isDownloading
+                      ? `Updating ${updater.downloadProgress}%`
+                      : `v${updater.newVersion} Ready!`}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => updater.checkForUpdates()}
+                  disabled={updater.isChecking}
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-mono transition-all"
+                  title={updater.statusMessage || 'Check for GitHub Updates'}
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${
+                      updater.isChecking ? 'animate-spin text-cyan-400' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="hidden sm:inline">
+                    {updater.isChecking ? 'Checking...' : updater.statusMessage || 'Updates'}
+                  </span>
+                </button>
+              )}
+            </>
+          )}
 
           {/* Configure Devices Button */}
           <button

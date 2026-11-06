@@ -15,6 +15,7 @@ import {
   PresetType,
 } from './types';
 import { Zap, Disc, Music, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useUpdater } from './hooks/useUpdater';
 
 // Check if running inside native Tauri desktop app
 export const isTauri = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__);
@@ -84,6 +85,7 @@ async function tauriInvoke<T>(cmd: string, args: Record<string, any> = {}): Prom
 }
 
 export const App: React.FC = () => {
+  const updater = useUpdater();
   const [activeTab, setActiveTab] = useState<'voice' | 'echoprank' | 'soundboard'>('voice');
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
@@ -400,6 +402,7 @@ export const App: React.FC = () => {
         onSelectMonitor={handleSelectMonitor}
         onToggleHearMyself={handleToggleHearMyself}
         onOpenGuide={() => setIsGuideOpen(true)}
+        updater={updater}
       />
 
       {/* Error Alert Banner if audio device cannot start */}
