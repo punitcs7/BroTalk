@@ -14,6 +14,17 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 struct StreamContainer(Vec<Stream>);
+
+#[inline(always)]
+fn soft_clip(x: f32) -> f32 {
+    if x > 0.82 {
+        0.82 + 0.18 * ((x - 0.82) / 0.18).tanh()
+    } else if x < -0.82 {
+        -0.82 + 0.18 * ((x + 0.82) / 0.18).tanh()
+    } else {
+        x
+    }
+}
 unsafe impl Send for StreamContainer {}
 unsafe impl Sync for StreamContainer {}
 
@@ -290,9 +301,29 @@ impl AudioEngineState {
         };
 
         // D. WASAPI Loopback Capture Stream (Friend Voice from Discord / Party Chat)
-        // Discord voice is played to the system's Default Output device by default.
+        // Must ALWAYS capture from the physical headphones/speakers where friends' voices are heard.
+        // Must NEVER capture from the virtual cable (which carries the user's own modulated voice)!
+        use super::device_manager::is_virtual_device_name;
+
         let default_out = host.default_output_device();
-        let loopback_dev_opt = default_out.as_ref().or(monitor_device.as_ref());
+        let non_virtual_mon = monitor_device.as_ref().filter(|d| {
+            d.name().map(|n| !is_virtual_device_name(&n)).unwrap_or(false)
+        });
+        let non_virtual_default = default_out.as_ref().filter(|d| {
+            d.name().map(|n| !is_virtual_device_name(&n)).unwrap_or(false)
+        });
+
+        let fallback_dev_holder;
+        let loopback_dev_opt = if let Some(mon) = non_virtual_mon {
+            Some(mon)
+        } else if let Some(def) = non_virtual_default {
+            Some(def)
+        } else {
+            fallback_dev_holder = host.output_devices().ok().and_then(|mut devs| {
+                devs.find(|d| d.name().map(|n| !is_virtual_device_name(&n)).unwrap_or(false))
+            });
+            fallback_dev_holder.as_ref()
+        };
         let echoprank_capture = self.echoprank.clone();
         let loopback_stream = if let Some(loopback_dev) = loopback_dev_opt {
             match loopback_dev.default_output_config() {
@@ -426,22 +457,9 @@ impl AudioEngineState {
         thread::spawn(move || {
             let mmcss_handle = set_mmcss_pro_audio();
             let mut dsp_chain = DspChain::new(virt_rate as f32);
-            let mut process_buf = vec![0.0_f32; 64];
+            let mut process_buf = vec![0.0_f32; 128];
 
             while is_running.load(Ordering::Relaxed) {
-                // Buffer pacing:
-                // Ensure prod_cable maintains ~10ms to 20ms of buffer (512 - 1536 floats = 256 - 768 stereo frames).
-                // If buffer is adequately full (>= 1536 floats), sleep briefly to allow the hardware DAC to consume.
-                if prod_cable.occupied_len() >= 1536 {
-                    thread::sleep(Duration::from_micros(600));
-                    continue;
-                }
-
-                // Clock drift safety: If mic buffer exceeds 256 samples, drain excess so mic latency never builds up
-                while cons_mic.occupied_len() > 192 {
-                    let _ = cons_mic.try_pop();
-                }
-
                 let start_time = Instant::now();
 
                 // Update DSP parameters
@@ -450,57 +468,101 @@ impl AudioEngineState {
                     dsp_chain.set_params(p);
                 }
 
-                // Read up to 64 mic samples; if mic is silent/empty, pad with 0.0
-                let mut mic_samples_count = 0;
+                // Read all currently available mic samples from ringbuffer
+                let mut samples_read = 0;
                 for s in process_buf.iter_mut() {
                     if let Some(val) = cons_mic.try_pop() {
                         *s = val;
-                        mic_samples_count += 1;
+                        samples_read += 1;
                     } else {
-                        *s = 0.0;
+                        break;
                     }
                 }
 
                 let hear_mic = hear_myself.load(Ordering::Relaxed);
                 let bypassed = is_bypassed.load(Ordering::Relaxed);
 
-                // Apply DSP to mic samples if present and not bypassed
-                if mic_samples_count > 0 && !bypassed {
-                    dsp_chain.process(&mut process_buf[..mic_samples_count]);
-                }
+                if samples_read > 0 {
+                    let active_slice = &mut process_buf[..samples_read];
 
-                // Mix each frame with EchoPrank and Soundboard
-                for i in 0..64 {
-                    let mic_s = process_buf[i];
-
-                    let prank_frame = echoprank.lock().1.next_frame();
-                    let sb_frame = soundboard.lock().next_frame();
-
-                    let (prank_l, prank_r) = prank_frame.unwrap_or((0.0, 0.0));
-                    let (sb_l, sb_r) = sb_frame;
-
-                    let cable_l = (mic_s + prank_l + sb_l).clamp(-1.0, 1.0);
-                    let cable_r = (mic_s + prank_r + sb_r).clamp(-1.0, 1.0);
-
-                    let mon_mic = if hear_mic { mic_s } else { 0.0 };
-                    let mon_l = (mon_mic + prank_l + sb_l).clamp(-1.0, 1.0);
-                    let mon_r = (mon_mic + prank_r + sb_r).clamp(-1.0, 1.0);
-
-                    if prod_cable.vacant_len() >= 2 {
-                        let _ = prod_cable.try_push(cable_l);
-                        let _ = prod_cable.try_push(cable_r);
+                    // Apply voice effects / DSP unless bypassed
+                    if !bypassed {
+                        dsp_chain.process(active_slice);
                     }
 
-                    if prod_mon.vacant_len() >= 2 {
-                        let _ = prod_mon.try_push(mon_l);
-                        let _ = prod_mon.try_push(mon_r);
-                    }
-                }
+                    // Mix exactly samples_read frames — 1:1 stream, NO ZERO PADDING!
+                    for &mic_s in active_slice.iter() {
+                        let prank_frame = echoprank.lock().1.next_frame();
+                        let sb_frame = soundboard.lock().next_frame();
 
-                if mic_samples_count > 0 {
+                        let (prank_l, prank_r) = prank_frame.unwrap_or((0.0, 0.0));
+                        let (sb_l, sb_r) = sb_frame;
+
+                        let cable_l = soft_clip(mic_s + prank_l + sb_l);
+                        let cable_r = soft_clip(mic_s + prank_r + sb_r);
+
+                        let mon_mic = if hear_mic { mic_s } else { 0.0 };
+                        let mon_l = soft_clip(mon_mic + prank_l + sb_l);
+                        let mon_r = soft_clip(mon_mic + prank_r + sb_r);
+
+                        if prod_cable.vacant_len() >= 2 {
+                            let _ = prod_cable.try_push(cable_l);
+                            let _ = prod_cable.try_push(cable_r);
+                        }
+
+                        if prod_mon.vacant_len() >= 2 {
+                            let _ = prod_mon.try_push(mon_l);
+                            let _ = prod_mon.try_push(mon_r);
+                        }
+                    }
+
                     let elapsed = start_time.elapsed().as_secs_f32() * 1000.0;
                     let total_latency = 4.8 + elapsed;
                     latency_bits.store(total_latency.to_bits(), Ordering::Relaxed);
+                } else {
+                    // Decoupled playback: when mic is silent, mix active Soundboard or EchoPrank
+                    // Paced by prod_cable buffer level so sounds play full duration at real DAC speed!
+                    if prod_cable.occupied_len() >= 1536 {
+                        thread::sleep(Duration::from_micros(600));
+                        continue;
+                    }
+
+                    let mut mixed_any = false;
+                    for _ in 0..64 {
+                        let prank_frame = echoprank.lock().1.next_frame();
+                        let sb_frame = soundboard.lock().next_frame();
+
+                        let has_prank = prank_frame.is_some();
+                        let has_sb = sb_frame != (0.0, 0.0);
+
+                        if has_prank || has_sb {
+                            mixed_any = true;
+                            let (prank_l, prank_r) = prank_frame.unwrap_or((0.0, 0.0));
+                            let (sb_l, sb_r) = sb_frame;
+
+                            let cable_l = soft_clip(prank_l + sb_l);
+                            let cable_r = soft_clip(prank_r + sb_r);
+
+                            if prod_cable.vacant_len() >= 2 {
+                                let _ = prod_cable.try_push(cable_l);
+                                let _ = prod_cable.try_push(cable_r);
+                            }
+
+                            if prod_mon.vacant_len() >= 2 {
+                                let _ = prod_mon.try_push(cable_l);
+                                let _ = prod_mon.try_push(cable_r);
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if !mixed_any {
+                        thread::sleep(Duration::from_micros(600));
+                    } else {
+                        // Sleep ~800us to match the ~1.33ms duration of 64 frames at 48kHz
+                        thread::sleep(Duration::from_micros(800));
+                    }
                 }
             }
 

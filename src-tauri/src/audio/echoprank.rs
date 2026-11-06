@@ -38,7 +38,7 @@ impl Default for PlaybackOptions {
             pitch_semitones: 0.0,
             stutter: false,
             looping: false,
-            volume: 1.25,
+            volume: 1.0,
         }
     }
 }
@@ -376,7 +376,7 @@ fn generate_vault_sfx(clip_type: &str, sample_rate: f32) -> Vec<f32> {
                     1.0
                 };
 
-                let val = (harsh * env * 0.90).clamp(-0.95, 0.95);
+                let val = (harsh * env * 0.65).clamp(-0.75, 0.75);
                 pcm.push(val);
                 pcm.push(val);
             }
@@ -402,7 +402,7 @@ fn generate_vault_sfx(clip_type: &str, sample_rate: f32) -> Vec<f32> {
                     1.0
                 };
 
-                let val = ((osc + formant) * chuckle_env * overall_env * 0.82).clamp(-0.95, 0.95);
+                let val = ((osc + formant) * chuckle_env * overall_env * 0.55).clamp(-0.75, 0.75);
                 pcm.push(val);
                 pcm.push(val);
             }
@@ -418,7 +418,7 @@ fn generate_vault_sfx(clip_type: &str, sample_rate: f32) -> Vec<f32> {
                     // Filtered breath / sigh noise
                     let noise = (((i * 1103515245 + 12345) & 0x7FFFFFFF) as f32 / 0x7FFFFFFF as f32) * 2.0 - 1.0;
                     let breath_env = (t / 0.45).min(1.0) * (1.0 - (t - 0.45).max(0.0) / 0.45);
-                    noise * breath_env * 0.55
+                    noise * breath_env * 0.35
                 } else {
                     // Desk slam impact at t = 0.9
                     let slam_t = t - 0.9;
@@ -427,10 +427,10 @@ fn generate_vault_sfx(clip_type: &str, sample_rate: f32) -> Vec<f32> {
                     let impact_env = (-14.0 * slam_t).exp();
                     let rumble_env = (-3.2 * slam_t).exp();
 
-                    sub * rumble_env * 0.85 + snap_noise * impact_env * 0.70
+                    sub * rumble_env * 0.70 + snap_noise * impact_env * 0.50
                 };
 
-                let clamped = val.clamp(-0.95, 0.95);
+                let clamped = val.clamp(-0.75, 0.75);
                 pcm.push(clamped);
                 pcm.push(clamped);
             }
@@ -455,7 +455,7 @@ fn generate_vault_sfx(clip_type: &str, sample_rate: f32) -> Vec<f32> {
                     1.0
                 };
 
-                let val = ((sine + formant) * env * 0.85).clamp(-0.95, 0.95);
+                let val = ((sine + formant) * env * 0.55).clamp(-0.75, 0.75);
                 pcm.push(val);
                 pcm.push(val);
             }
