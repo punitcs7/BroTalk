@@ -1,0 +1,66 @@
+name: 'Release BroTalk'
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'BroTalk v__VERSION__'
+          releaseBody: |
+            ## BroTalk Voice Changer, Soundboard & EchoPrank Sampler v__VERSION__
+
+            ### What's Included:
+            - **Windows Setup Installer (NSIS):** `BroTalk___VERSION___x64-setup.exe`
+            - **Windows MSI Package:** `BroTalk___VERSION___x64_en-US.msi`
+            - **Automatic Updates Manifest:** `latest.json` & cryptographic `.sig` files
+
+            Automated build generated with Tauri 2.0 and GitHub Actions.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
