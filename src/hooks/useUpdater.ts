@@ -17,7 +17,7 @@ export function useUpdater() {
     isChecking: false,
     updateAvailable: false,
     newVersion: null,
-    currentVersion: '1.1.1',
+    currentVersion: '1.1.2',
     isDownloading: false,
     downloadProgress: 0,
     statusMessage: null,
